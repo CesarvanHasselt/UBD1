@@ -7,6 +7,9 @@ AnalogIn analog3(A2); // Rechts
 
 #define SYSTEM_VOLTAGE 3.3f
 
+// Time (in milliseconds) to turn left or right before moving forward again
+const int turnDelayMs = 1500;
+
 // Stub motor control functions (replace with your real control)
 void DriveForward()  { printf("Motors: Forward\n"); }
 void TurnLeft()      { printf("Motors: Turn Left\n"); }
@@ -98,11 +101,12 @@ int main() {
                 TurnRight();
                 laatsteRichting = 1;
             }
+            // Wait while turning before checking again
+            ThisThread::sleep_for(turnDelayMs);
         } else {
             // Front clear: drive forward for 0.5 seconds, then resume normal checks
             DriveForward();
             ThisThread::sleep_for(500ms);
-            // Then normal pause before next loop iteration
         }
 
         ThisThread::sleep_for(100ms);
