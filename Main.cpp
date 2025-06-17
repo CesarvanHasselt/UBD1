@@ -1,254 +1,110 @@
-
-/* mbed Microcontroller Library
- * Copyright (c) 2019 ARM Limited
- * SPDX-License-Identifier: Apache-2.0
- */
 #include "mbed.h"
-#include <cstdio>
 
-AnalogIn IRrangefinder_middenvoor(A0);
-AnalogIn IRrangefinder_links(A1);
-AnalogIn IRrangefinder_rechts(A2);
-// AnalogIn IRrangefinder_middenlinks(PA_2);
-// AnalogIn IRrangefinder_links(PA_4);
+// Define analog inputs (for 3 Sharp GP2Y0A41SK0F sensors)
+AnalogIn analog1(A0); // Middenvoor
+AnalogIn analog2(A1); // Links
+AnalogIn analog3(A2); // Rechts
 
-AnalogIn IRsensorL();
-AnalogIn IRsensorR();
- 
-// Define Motor Left Front
-DigitalOut MLFin1(PA_10);
-DigitalOut MLFin2(PB_3);
-PwmOut MLFpwm(PB_4);  
+#define SYSTEM_VOLTAGE 3.3f
 
-// Define Motor Right Front 
-DigitalOut MRFin1(D4);
-DigitalOut MRFin2(D7);
-PwmOut MRFpwm(D6);  
+// Stub motor control functions (replace with your real control)
+void DriveForward()  { printf("Motors: Forward\n"); }
+void TurnLeft()      { printf("Motors: Turn Left\n"); }
+void TurnRight()     { printf("Motors: Turn Right\n"); }
+void Stop()          { printf("Motors: Stop\n"); }
 
-// Define Motor Left Rear
-DigitalOut MLRin1(PA_10);
-DigitalOut MLRin2(PB_3);
-PwmOut MLRpwm(PB_4);  
-
-// Define Motor Right Rear
-DigitalOut MRRin1(D4);
-DigitalOut MRRin2(D7);
-PwmOut MRRpwm(D6);    
-
-void DriveForward()
-{
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-}
-
-void DriveBackward()
-{
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-}
-
-void DriveToTheRight()
-{
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-}
-
-void DriveToTheLeft()
-{
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-}
-void TurnAround()
-{
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-    MLFin1 = 0; MLFin2 = 0;
-    MLFpwm.write(1.0f);
-
-}
-
+// Conversion function
 float convert_to_cm(float voltage) {
-    // If voltage is very low or equal to offset, return max distance
-    if (voltage <= 0.42f) return 30.0f;
-
-    float a = 27.86f; // scale factor
-    float b = 0.42f;  // voltage offset
-
-    float distance = a / (voltage - b);
-
-    // Clamp distance within sensor specs
+    if (voltage <= 0.1f) return 30.0f;
+    float distance = 13.0f / (voltage - 0.1f);
     if (distance < 3.0f) distance = 3.0f;
-    else if (distance > 30.0f) distance = 30.0f;
-
+    if (distance > 30.0f) distance = 30.0f;
     return distance;
 }
 
-
-
 int MiddenvoorCheck(float voltageVoor) {
     float distance_cm = convert_to_cm(voltageVoor);
-    int DetectieVoor = 0;
-
-    printf("Voor: %.1f cm\t", distance_cm);  // No newline here
-
-    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
-        DetectieVoor = 0; // Safe
-    } else if (distance_cm > 20.0f) {
-        DetectieVoor = 2; // Cliff / drop
-    } else if (distance_cm < 8.0f) {
-        DetectieVoor = 1; // Object detected
-    }
-
-    return DetectieVoor;
+    printf("Middenvoor: %.1f cm\t", distance_cm);
+    if (distance_cm >= 8.0f && distance_cm <= 20.0f) return 0;      // Safe
+    else if (distance_cm > 20.0f) return 2;                         // Cliff / drop
+    else return 1;                                                  // Object detected
 }
 
 int LinksCheck(float voltageLinks) {
     float distance_cm = convert_to_cm(voltageLinks);
-    int DetectieLinks = 0;
-
-    printf("Links: %.1f cm\t", distance_cm);  // No newline here
-
-    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
-        DetectieLinks = 0; // Safe
-    } else {
-        DetectieLinks = 1; // Either object or cliff
-    }
-
-    return DetectieLinks;
+    printf("Links: %.1f cm\t", distance_cm);
+    return (distance_cm >= 8.0f && distance_cm <= 20.0f) ? 0 : 1;
 }
 
 int RechtsCheck(float voltageRechts) {
     float distance_cm = convert_to_cm(voltageRechts);
-    int DetectieRechts = 0;
-
-    printf("Rechts: %.1f cm\n", distance_cm);  // Final newline here
-
-    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
-        DetectieRechts = 0; // Safe
-    } else {
-        DetectieRechts = 1; // Either object or cliff
-    }
-
-    return DetectieRechts;
+    printf("Rechts: %.1f cm\n", distance_cm);
+    return (distance_cm >= 8.0f && distance_cm <= 20.0f) ? 0 : 1;
 }
 
-
+// Decide direction to avoid obstacles on sides
 int RichtingBepalen(int DetectieLinks, int DetectieRechts)
 {
-    static int laatsteRichting = 0;  // 0 = onbekend, 1 = rechts, 2 = links
+    static int laatsteRichting = 0;  // 0 = unknown, 1 = right, 2 = left, 3 = stuck
 
     if ((DetectieRechts == 1) && (DetectieLinks == 0)) {
-        printf("links leeg\n");
-        laatsteRichting = 1;
-    }
-    else if ((DetectieLinks == 1) && (DetectieRechts == 0)) {
-        printf("rechts leeg\n");
+        printf("Decision: go left\n");
         laatsteRichting = 2;
     }
+    else if ((DetectieLinks == 1) && (DetectieRechts == 0)) {
+        printf("Decision: go right\n");
+        laatsteRichting = 1;
+    }
     else if ((DetectieRechts == 0) && (DetectieLinks == 0)) {
-        printf("leeg\n");
-        // laatsteRichting blijft ongewijzigd
+        printf("Decision: clear both sides\n");
+        // Keep last direction or 0 = unknown
     }
     else if ((DetectieRechts == 1) && (DetectieLinks == 1)) {
-        printf("vast\n");
+        printf("Decision: stuck - obstacle both sides\n");
         laatsteRichting = 3;
     }
 
     return laatsteRichting;
 }
 
-int richtingVoorBepalen(int richtingVoorBepalen, int DetectieVoor)
-{
-    printf("richtingVoorBepalen :%d \n", richtingVoorBepalen);
-    if (DetectieVoor == 0)
-    {
-        printf("ga naar voren\n");
+int main() {
+    printf("GP2Y0A41SK0F IR Sensor Distance & Direction Readings\n");
+
+    int laatsteRichting = 0; // Keep track of last turn direction
+
+    while (true) {
+        float vMiddenvoor = analog1.read() * SYSTEM_VOLTAGE;
+        float vLinks = analog2.read() * SYSTEM_VOLTAGE;
+        float vRechts = analog3.read() * SYSTEM_VOLTAGE;
+
+        int detectieVoor = MiddenvoorCheck(vMiddenvoor);
+        int detectieLinks = LinksCheck(vLinks);
+        int detectieRechts = RechtsCheck(vRechts);
+
+        int richting = RichtingBepalen(detectieLinks, detectieRechts);
+        if (richting != 0) laatsteRichting = richting;
+
+        printf("Detectie Voor: %d, Links: %d, Rechts: %d, Richting: %d\n", 
+                detectieVoor, detectieLinks, detectieRechts, richting);
+
+        if (detectieVoor == 1) {
+            // Object detected in front: keep turning until front clear
+            if (laatsteRichting == 1) {
+                TurnRight();
+            } else if (laatsteRichting == 2) {
+                TurnLeft();
+            } else {
+                // No known direction? Default to turning right
+                TurnRight();
+                laatsteRichting = 1;
+            }
+        } else {
+            // Front clear: drive forward for 0.5 seconds, then resume normal checks
+            DriveForward();
+            ThisThread::sleep_for(500ms);
+            // Then normal pause before next loop iteration
+        }
+
+        ThisThread::sleep_for(100ms);
     }
-    else if ((DetectieVoor =! 0)&&(richtingVoorBepalen == 1))//ga naar rechts
-    {
-        printf("ga naar rechts\n");
-    }
-    else if ((DetectieVoor =! 0)&&(richtingVoorBepalen == 2)) // ga naar links
-    {
-        printf("ga naar links\n");
-    }
-    else if (DetectieVoor == 2)
-    {
-        printf("draai om\n");
-    }
-    return 0;
-}
-
-int main()
-{
-    
-    while (true)
-    {
-        float SensorValueVoor = IRrangefinder_middenvoor.read();
-        float SensorValueLinks = IRrangefinder_links.read();
-        float SensorValueRechts = IRrangefinder_rechts.read();
-
-        int DetectieVoor = MiddenvoorCheck(SensorValueVoor);
-        int DetectieLinks = LinksCheck(SensorValueLinks);
-        int DetectieRechts = RechtsCheck(SensorValueRechts);
-
-        //printf("sensor voor %f var %d\n", SensorValueVoor, DetectieVoor);
-        // printf("sensor links %f var %d\n", SensorValueLinks, DetectieLinks);
-        // printf("sensor rechts %f var %d\n", SensorValueRechts, DetectieRechts);
-        //richting bepalen
-
-        // int rechtslinks = RichtingBepalen(DetectieLinks, DetectieRechts); //1 is rechts 2 is voor 3 is links
-        // int NaarMotor = richtingVoorBepalen(rechtslinks, DetectieVoor);        
-
-        ThisThread::sleep_for(1000ms);
-    }
-
-
 }
