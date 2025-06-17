@@ -1,3 +1,4 @@
+
 /* mbed Microcontroller Library
  * Copyright (c) 2019 ARM Limited
  * SPDX-License-Identifier: Apache-2.0
@@ -113,66 +114,71 @@ void TurnAround()
 
 }
 
-// int speed = 10;
-int MiddenvoorCheck(float SensorValueVoor)
-{
+float convert_to_cm(float voltage) {
+    // If voltage is very low or equal to offset, return max distance
+    if (voltage <= 0.42f) return 30.0f;
+
+    float a = 27.86f; // scale factor
+    float b = 0.42f;  // voltage offset
+
+    float distance = a / (voltage - b);
+
+    // Clamp distance within sensor specs
+    if (distance < 3.0f) distance = 3.0f;
+    else if (distance > 30.0f) distance = 30.0f;
+
+    return distance;
+}
+
+
+
+int MiddenvoorCheck(float voltageVoor) {
+    float distance_cm = convert_to_cm(voltageVoor);
     int DetectieVoor = 0;
 
-    if ((SensorValueVoor >= 0.37)&&(SensorValueVoor <= 0.44))// safe zone
-    {
-        DetectieVoor = 0;
-    }
-    else if (SensorValueVoor < 0.37) //afgrond
-    {
-        DetectieVoor = 2;
-    }
-    else if (SensorValueVoor > 0.44) // opject
-    {
-        DetectieVoor = 1;
+    printf("Voor: %.1f cm\t", distance_cm);  // No newline here
+
+    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
+        DetectieVoor = 0; // Safe
+    } else if (distance_cm > 20.0f) {
+        DetectieVoor = 2; // Cliff / drop
+    } else if (distance_cm < 8.0f) {
+        DetectieVoor = 1; // Object detected
     }
 
     return DetectieVoor;
 }
 
-int LinksCheck(float SensorValueLinks)
-{
+int LinksCheck(float voltageLinks) {
+    float distance_cm = convert_to_cm(voltageLinks);
     int DetectieLinks = 0;
 
-    if ((SensorValueLinks < 0.37)&&(SensorValueLinks <= 0.44))
-    {
-        DetectieLinks = 0;
-    }
-    else if (SensorValueLinks < 0.37) //afgrond
-    {
-        DetectieLinks = 1;
-    }
-    else if (SensorValueLinks > 0.44) // opject
-    {
-        DetectieLinks = 1;
+    printf("Links: %.1f cm\t", distance_cm);  // No newline here
+
+    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
+        DetectieLinks = 0; // Safe
+    } else {
+        DetectieLinks = 1; // Either object or cliff
     }
 
     return DetectieLinks;
 }
 
-int RechtsCheck(float SensorValueRechts)
-{
+int RechtsCheck(float voltageRechts) {
+    float distance_cm = convert_to_cm(voltageRechts);
     int DetectieRechts = 0;
 
-    if ((SensorValueRechts < 0.37)&&(SensorValueRechts <= 0.44))
-    {
-        DetectieRechts = 0;
-    }
-    else if (SensorValueRechts < 0.37) //afgrond
-    {
-        DetectieRechts = 1;
-    }
-    else if (SensorValueRechts > 0.44) // opject
-    {
-        DetectieRechts = 1;
+    printf("Rechts: %.1f cm\n", distance_cm);  // Final newline here
+
+    if (distance_cm >= 8.0f && distance_cm <= 20.0f) {
+        DetectieRechts = 0; // Safe
+    } else {
+        DetectieRechts = 1; // Either object or cliff
     }
 
     return DetectieRechts;
 }
+
 
 int RichtingBepalen(int DetectieLinks, int DetectieRechts)
 {
@@ -234,9 +240,8 @@ int main()
         int DetectieRechts = RechtsCheck(SensorValueRechts);
 
         //printf("sensor voor %f var %d\n", SensorValueVoor, DetectieVoor);
-        printf("sensor links %f var %d\n", SensorValueLinks, DetectieLinks);
-        printf("sensor rechts %f var %d\n", SensorValueRechts, DetectieRechts);
-
+        // printf("sensor links %f var %d\n", SensorValueLinks, DetectieLinks);
+        // printf("sensor rechts %f var %d\n", SensorValueRechts, DetectieRechts);
         //richting bepalen
 
         // int rechtslinks = RichtingBepalen(DetectieLinks, DetectieRechts); //1 is rechts 2 is voor 3 is links
