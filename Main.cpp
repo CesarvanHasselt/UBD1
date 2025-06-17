@@ -7,14 +7,27 @@ AnalogIn analog3(A2); // Rechts
 
 #define SYSTEM_VOLTAGE 3.3f
 
-// Time (in milliseconds) to turn left or right before moving forward again
-const int turnDelayMs = 1500;
+// Motor pins setup
+DigitalOut MLFin1(D12);
+DigitalOut MLFin2(D13);
+PwmOut MLFpwm(D5);
 
-// Stub motor control functions (replace with your real control)
-void DriveForward()  { printf("Motors: Forward\n"); }
-void TurnLeft()      { printf("Motors: Turn Left\n"); }
-void TurnRight()     { printf("Motors: Turn Right\n"); }
-void Stop()          { printf("Motors: Stop\n"); }
+DigitalOut MLRin3(D11);
+DigitalOut MLRin4(D10);
+PwmOut MLRpwm(D6);
+
+DigitalOut MRFin1(D7);
+DigitalOut MRFin2(D8);
+PwmOut MRFpwm(D9);
+
+DigitalOut MRRin3(D4);
+DigitalOut MRRin4(D3);
+PwmOut MRRpwm(D2);
+
+// Configurable parameters
+const float motorSpeed = 0.6f;      // Speed for all motor movements (0.0 to 1.0)
+const int turnDelayMs = 1500;       // Time to keep turning (ms) when avoiding obstacles
+const int rotateTimeMs = 2000;      // Time to rotate on cliff detection (ms)
 
 // Conversion function
 float convert_to_cm(float voltage) {
@@ -25,6 +38,62 @@ float convert_to_cm(float voltage) {
     return distance;
 }
 
+// Motor control helper function
+void setMotor(DigitalOut& in1, DigitalOut& in2, PwmOut& pwm, bool forward, float speed) {
+    if (forward) {
+        in1 = 1;
+        in2 = 0;
+    } else {
+        in1 = 0;
+        in2 = 1;
+    }
+    pwm.write(speed);
+}
+
+void stopMotors() {
+    MLFpwm.write(0.0f);
+    MLRpwm.write(0.0f);
+    MRFpwm.write(0.0f);
+    MRRpwm.write(0.0f);
+}
+
+// Movement functions
+void driveForward(float speed) {
+    setMotor(MLFin1, MLFin2, MLFpwm, true, speed);
+    setMotor(MLRin3, MLRin4, MLRpwm, true, speed);
+    setMotor(MRFin1, MRFin2, MRFpwm, true, speed);
+    setMotor(MRRin3, MRRin4, MRRpwm, true, speed);
+}
+
+void driveLeft(float speed) {
+    setMotor(MLFin1, MLFin2, MLFpwm, false, speed);
+    setMotor(MLRin3, MLRin4, MLRpwm, true, speed);
+    setMotor(MRFin1, MRFin2, MRFpwm, true, speed);
+    setMotor(MRRin3, MRRin4, MRRpwm, false, speed);
+}
+
+void driveRight(float speed) {
+    setMotor(MLFin1, MLFin2, MLFpwm, true, speed);
+    setMotor(MLRin3, MLRin4, MLRpwm, false, speed);
+    setMotor(MRFin1, MRFin2, MRFpwm, false, speed);
+    setMotor(MRRin3, MRRin4, MRRpwm, true, speed);
+}
+
+void rotateClockwise(float speed) {
+    setMotor(MLFin1, MLFin2, MLFpwm, true, speed);
+    setMotor(MLRin3, MLRin4, MLRpwm, true, speed);
+    setMotor(MRFin1, MRFin2, MRFpwm, false, speed);
+    setMotor(MRRin3, MRRin4, MRRpwm, false, speed);
+}
+
+void rotateCounterClockwise(float speed) {
+    setMotor(MLFin1, MLFin2, MLFpwm, false, speed);
+    setMotor(MLRin3, MLRin4, MLRpwm, false, speed);
+    setMotor(MRFin1, MRFin2, MRFpwm, true, speed);
+    setMotor(MRRin3, MRRin4, MRRpwm, true, speed);
+}
+
+// Sensor checks
 int MiddenvoorCheck(float voltageVoor) {
     float distance_cm = convert_to_cm(voltageVoor);
     printf("Middenvoor: %.1f cm\t", distance_cm);
@@ -73,7 +142,21 @@ int RichtingBepalen(int DetectieLinks, int DetectieRechts)
 int main() {
     printf("GP2Y0A41SK0F IR Sensor Distance & Direction Readings\n");
 
+    // PWM frequency setup
+    MLFpwm.period(0.001f);
+    MLRpwm.period(0.001f);
+    MRFpwm.period(0.001f);
+    MRRpwm.period(0.001f);
+
     int laatsteRichting = 0; // Keep track of last turn direction
+    int cliffDetectionCounter = 0;     // Counter for consecutive cliff detections
+    const int cliffThreshold = 3;      // Require 3 consecutive cliff detections before reacting
+
+    Timer actionTimer;
+    actionTimer.start();
+
+    enum State { FORWARD, TURN_LEFT, TURN_RIGHT, ROTATE, STOPPED };
+    State currentState = STOPPED;
 
     while (true) {
         float vMiddenvoor = analog1.read() * SYSTEM_VOLTAGE;
@@ -90,25 +173,82 @@ int main() {
         printf("Detectie Voor: %d, Links: %d, Rechts: %d, Richting: %d\n", 
                 detectieVoor, detectieLinks, detectieRechts, richting);
 
-        if (detectieVoor == 1) {
-            // Object detected in front: keep turning until front clear
-            if (laatsteRichting == 1) {
-                TurnRight();
-            } else if (laatsteRichting == 2) {
-                TurnLeft();
-            } else {
-                // No known direction? Default to turning right
-                TurnRight();
-                laatsteRichting = 1;
+        // Decide next action based on sensor input and timers
+        switch(currentState) {
+            case FORWARD:
+            if (detectieVoor == 1 && detectieLinks == 1 && detectieRechts == 1) {
+                // Surrounded - rotate
+                rotateClockwise(motorSpeed);
+                actionTimer.reset();
+                currentState = ROTATE;
+                printf("Surrounded: rotating 180 degrees\n");
+                break;
             }
-            // Wait while turning before checking again
-            ThisThread::sleep_for(turnDelayMs);
-        } else {
-            // Front clear: drive forward for 0.5 seconds, then resume normal checks
-            DriveForward();
-            ThisThread::sleep_for(500ms);
+
+            if (detectieVoor == 2) {
+                cliffDetectionCounter++;
+                if (cliffDetectionCounter >= cliffThreshold) {
+                    rotateClockwise(motorSpeed);
+                    actionTimer.reset();
+                    currentState = ROTATE;
+                    printf("Cliff detected 3x: rotate\n");
+                    cliffDetectionCounter = 0;
+                } else {
+                    driveForward(motorSpeed);
+                }
+            } else {
+                cliffDetectionCounter = 0;
+
+                if (detectieVoor == 1) {
+                    if (laatsteRichting == 1) {
+                        driveRight(motorSpeed);
+                        currentState = TURN_RIGHT;
+                    } else if (laatsteRichting == 2) {
+                        driveLeft(motorSpeed);
+                        currentState = TURN_LEFT;
+                    } else {
+                        driveRight(motorSpeed);
+                        currentState = TURN_RIGHT;
+                        laatsteRichting = 1;
+                    }
+                    actionTimer.reset();
+                } else {
+                    driveForward(motorSpeed);
+                }
+            }
+            break;
+            
+            case TURN_LEFT:
+                if (actionTimer.read_ms() >= turnDelayMs) {
+                    // Done turning, go forward
+                    driveForward(motorSpeed);
+                    currentState = FORWARD;
+                }
+                break;
+
+            case TURN_RIGHT:
+                if (actionTimer.read_ms() >= turnDelayMs) {
+                    // Done turning, go forward
+                    driveForward(motorSpeed);
+                    currentState = FORWARD;
+                }
+                break;
+
+            case ROTATE:
+                if (actionTimer.read_ms() >= rotateTimeMs) {
+                    // Done rotating, go forward
+                    driveForward(motorSpeed);
+                    currentState = FORWARD;
+                }
+                break;
+
+            case STOPPED:
+            default:
+                stopMotors();
+                currentState = FORWARD;  // Start moving forward
+                break;
         }
 
-        ThisThread::sleep_for(100ms);
+        ThisThread::sleep_for(20ms); // Small delay for CPU relief & sensor update rate
     }
 }
